@@ -635,6 +635,97 @@ class EditorController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> runFlutterAnalyze() async {
+    final sdkPath = _sdkSnapshot.path;
+    if (sdkPath == null) {
+      _pushActivity(
+        'Analyzer unavailable',
+        'Choose a Flutter SDK before running flutter analyze.',
+        Icons.warning_amber_rounded,
+        const Color(0xFFF59E0B),
+      );
+      notifyListeners();
+      return;
+    }
+    _pushActivity(
+      'Running Flutter analyzer',
+      'Checking the project for Dart errors and lint warnings.',
+      Icons.rule_rounded,
+      const Color(0xFF2563EB),
+    );
+    notifyListeners();
+    final result = await Process.run(
+      _flutterExecutablePath(sdkPath),
+      <String>['analyze', '--no-pub'],
+      workingDirectory: _workspacePath,
+      runInShell: Platform.isWindows,
+    );
+    final output = '${result.stdout}\n${result.stderr}'.trim();
+    _pushActivity(
+      result.exitCode == 0 ? 'Analyzer passed' : 'Analyzer found issues',
+      output.isEmpty ? 'No analyzer output.' : _lastLines(output),
+      result.exitCode == 0
+          ? Icons.check_circle_rounded
+          : Icons.error_outline_rounded,
+      result.exitCode == 0 ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
+    );
+    notifyListeners();
+  }
+
+  Future<void> getFlutterPackages() async {
+    final sdkPath = _sdkSnapshot.path;
+    if (sdkPath == null) return;
+    final result = await Process.run(
+      _flutterExecutablePath(sdkPath),
+      const <String>['pub', 'get'],
+      workingDirectory: _workspacePath,
+      runInShell: Platform.isWindows,
+    );
+    final output = '${result.stdout}\n${result.stderr}'.trim();
+    _pushActivity(
+      result.exitCode == 0 ? 'Packages installed' : 'Package install failed',
+      output.isEmpty ? 'flutter pub get completed.' : _lastLines(output),
+      result.exitCode == 0
+          ? Icons.inventory_2_rounded
+          : Icons.error_outline_rounded,
+      result.exitCode == 0 ? const Color(0xFF16A34A) : const Color(0xFFEF4444),
+    );
+    notifyListeners();
+  }
+
+  Future<void> installFlutterPlugin(String dependency) async {
+    final spec = dependency.trim();
+    final match = RegExp(r'^([a-zA-Z0-9_]+)(?:\s*:\s*(.+))?$').firstMatch(spec);
+    if (match == null) {
+      throw StateError('Use a package like http or http: ^1.2.0.');
+    }
+    final name = match.group(1)!;
+    final constraint = match.group(2)?.trim();
+    final pubspec = _files
+        .where((file) => file.path == 'pubspec.yaml')
+        .firstOrNull;
+    if (pubspec == null) {
+      throw StateError('The project has no pubspec.yaml file.');
+    }
+    if (RegExp('^\\s*$name:', multiLine: true).hasMatch(pubspec.content)) {
+      throw StateError('$name is already listed in pubspec.yaml.');
+    }
+    final line = '  $name:${constraint == null ? '' : ' $constraint'}';
+    final dependencies = RegExp(
+      r'^dependencies:\s*$',
+      multiLine: true,
+    ).firstMatch(pubspec.content);
+    if (dependencies == null) {
+      throw StateError('pubspec.yaml has no dependencies section.');
+    }
+    final insertAt = dependencies.end;
+    pubspec.content =
+        '${pubspec.content.substring(0, insertAt)}\n$line${pubspec.content.substring(insertAt)}';
+    pubspec.dirty = true;
+    notifyListeners();
+    await saveWorkspace();
+  }
+
   Future<void> saveWorkspace({bool syncPreview = true}) async {
     final targetPath = _workspacePath.trim().isEmpty
         ? _defaultWorkspacePath(_projectName)
@@ -797,6 +888,15 @@ String _homeDirectory() {
     return home.trim();
   }
   return Directory.current.path;
+}
+
+String _lastLines(String output) {
+  final lines = output
+      .split(RegExp(r'\r?\n'))
+      .where((line) => line.trim().isNotEmpty)
+      .toList();
+  if (lines.length <= 3) return lines.join(' ');
+  return lines.skip(lines.length - 3).join(' ');
 }
 
 String _defaultInstallPath() {

@@ -7,7 +7,6 @@ import 'package:webview_flutter/webview_flutter.dart';
 
 import 'editor_controller.dart';
 import 'flutter_preview_runner.dart';
-import 'live_preview.dart';
 import 'models.dart';
 
 class EditorHomePage extends StatefulWidget {
@@ -320,6 +319,9 @@ class _EditorHomePageState extends State<EditorHomePage> {
                         onSaveWorkspace: _controller.saveWorkspace,
                         onAddFile: _openAddFileDialog,
                         onGenerateSample: _controller.generateStarterWorkspace,
+                        onAnalyze: _controller.runFlutterAnalyze,
+                        onGetPackages: _controller.getFlutterPackages,
+                        onAddPlugin: _openPluginDialog,
                       ),
                       Expanded(
                         child: Padding(
@@ -569,6 +571,45 @@ class _EditorHomePageState extends State<EditorHomePage> {
     }
   }
 
+  Future<void> _openPluginDialog() async {
+    final packageController = TextEditingController();
+    final dependency = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Install Flutter plugin'),
+        content: TextField(
+          controller: packageController,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Package dependency',
+            hintText: 'http: ^1.2.0',
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, packageController.text),
+            child: const Text('Install'),
+          ),
+        ],
+      ),
+    );
+    packageController.dispose();
+    if (dependency == null || dependency.trim().isEmpty) return;
+    try {
+      await _controller.installFlutterPlugin(dependency);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Plugin install failed: $error')),
+        );
+      }
+    }
+  }
+
   void _selectProjectFile(String path) {
     if (!_controller.selectFilePath(path)) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -604,6 +645,9 @@ class _TopCommandBar extends StatelessWidget {
     required this.onSaveWorkspace,
     required this.onAddFile,
     required this.onGenerateSample,
+    required this.onAnalyze,
+    required this.onGetPackages,
+    required this.onAddPlugin,
   });
 
   final EditorController controller;
@@ -612,6 +656,9 @@ class _TopCommandBar extends StatelessWidget {
   final Future<void> Function() onSaveWorkspace;
   final Future<void> Function() onAddFile;
   final VoidCallback onGenerateSample;
+  final Future<void> Function() onAnalyze;
+  final Future<void> Function() onGetPackages;
+  final Future<void> Function() onAddPlugin;
 
   @override
   Widget build(BuildContext context) {
@@ -739,6 +786,30 @@ class _TopCommandBar extends StatelessWidget {
               unawaited(onAddFile());
             },
             icon: const Icon(Icons.add_rounded, color: Color(0xFFE5E7EB)),
+          ),
+          const SizedBox(width: 8),
+          PopupMenuButton<String>(
+            tooltip: 'Flutter tools',
+            icon: const Icon(
+              Icons.build_circle_outlined,
+              color: Color(0xFFE5E7EB),
+            ),
+            onSelected: (value) {
+              if (value == 'analyze') unawaited(onAnalyze());
+              if (value == 'packages') unawaited(onGetPackages());
+              if (value == 'plugin') unawaited(onAddPlugin());
+            },
+            itemBuilder: (context) => const <PopupMenuEntry<String>>[
+              PopupMenuItem(
+                value: 'analyze',
+                child: Text('Run Flutter analyze'),
+              ),
+              PopupMenuItem(
+                value: 'packages',
+                child: Text('Install pub packages'),
+              ),
+              PopupMenuItem(value: 'plugin', child: Text('Add Flutter plugin')),
+            ],
           ),
           const SizedBox(width: 8),
           TextButton(
@@ -1746,51 +1817,6 @@ class _RuntimePreviewSurfaceState extends State<_RuntimePreviewSurface> {
   }
 }
 
-class _PanelHeader extends StatelessWidget {
-  const _PanelHeader({
-    required this.title,
-    required this.subtitle,
-    this.trailing,
-  });
-
-  final String title;
-  final String subtitle;
-  final Widget? trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                title,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  color: const Color(0xFFF3F4F6),
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.1,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: const Color(0xFF9CA3AF),
-                  height: 1.3,
-                ),
-              ),
-            ],
-          ),
-        ),
-        ...?(trailing == null ? null : <Widget>[trailing!]),
-      ],
-    );
-  }
-}
-
 class _SectionShell extends StatelessWidget {
   const _SectionShell({required this.child});
 
@@ -1997,174 +2023,6 @@ class _PathRow extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _FileTile extends StatelessWidget {
-  const _FileTile({
-    required this.file,
-    required this.selected,
-    required this.onTap,
-    required this.onDelete,
-  });
-
-  final WorkspaceFile file;
-  final bool selected;
-  final VoidCallback onTap;
-  final VoidCallback onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    final borderColor = selected
-        ? const Color(0xFF4FC1FF)
-        : const Color(0xFF343748);
-    final background = selected
-        ? const Color(0xFF31333F)
-        : const Color(0xFF1B1D26);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor),
-        ),
-        child: Row(
-          children: <Widget>[
-            Container(
-              width: 34,
-              height: 34,
-              decoration: BoxDecoration(
-                color: selected
-                    ? const Color(0xFF0EA5E9)
-                    : const Color(0xFF2A2D39),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                _iconForFile(file),
-                size: 18,
-                color: selected ? Colors.white : const Color(0xFFCBD5E1),
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    file.name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: const Color(0xFFF3F4F6),
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    file.path,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFF9CA3AF),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-            if (file.dirty)
-              const Padding(
-                padding: EdgeInsets.only(right: 6),
-                child: Icon(
-                  Icons.fiber_manual_record,
-                  size: 10,
-                  color: Color(0xFFF59E0B),
-                ),
-              ),
-            IconButton(
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline_rounded, size: 18),
-              color: const Color(0xFFCBD5E1),
-              tooltip: 'Remove file',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ActivityTile extends StatelessWidget {
-  const _ActivityTile({required this.entry});
-
-  final ActivityEntry entry;
-
-  @override
-  Widget build(BuildContext context) {
-    final timeLabel = MaterialLocalizations.of(
-      context,
-    ).formatTimeOfDay(TimeOfDay.fromDateTime(entry.timestamp));
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF1B1D26),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF343748)),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: Color.lerp(entry.accent, Colors.black, 0.85),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(entry.icon, color: entry.accent, size: 18),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Text(
-                        entry.message,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: const Color(0xFFF3F4F6),
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      timeLabel,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                        color: const Color(0xFF9CA3AF),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  entry.detail,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: const Color(0xFFCBD5E1),
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

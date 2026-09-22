@@ -365,5 +365,5 @@ String _projectNameFrom(String path) {
 String _join(String first, String second, [String? third]) => <String>[
   first,
   second,
-  if (third != null) third,
+  ?third,
 ].join(Platform.pathSeparator);
