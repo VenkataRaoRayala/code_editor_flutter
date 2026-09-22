@@ -1440,6 +1440,11 @@ class _RuntimePreviewSurfaceState extends State<_RuntimePreviewSurface> {
               setState(() => _webError = null);
             }
           },
+          onPageFinished: (_) {
+            if (mounted) {
+              setState(() => _webError = null);
+            }
+          },
           onWebResourceError: (error) {
             if (mounted && error.isForMainFrame != false) {
               setState(() => _webError = error.description);
@@ -1449,7 +1454,10 @@ class _RuntimePreviewSurfaceState extends State<_RuntimePreviewSurface> {
       );
       // Wait for WebViewWidget's platform view to be mounted before navigating.
       await WidgetsBinding.instance.endOfFrame;
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+      // On macOS the platform view may need another run-loop turn after the
+      // first frame. Navigating sooner can silently drop the first request;
+      // that is why a manual Reload used to be required on initial preview.
+      await Future<void>.delayed(const Duration(milliseconds: 800));
       if (!mounted) {
         return;
       }
@@ -1464,6 +1472,12 @@ class _RuntimePreviewSurfaceState extends State<_RuntimePreviewSurface> {
 
   Future<void> _loadPreview(Uri uri) async {
     try {
+      // Give the native WebView one extra frame when the preview panel was
+      // just mounted alongside the Flutter web server.
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      if (!mounted || widget.runner.previewUri != uri) {
+        return;
+      }
       await _webController.loadRequest(uri);
     } catch (error) {
       if (mounted) {
