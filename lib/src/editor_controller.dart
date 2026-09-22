@@ -733,6 +733,21 @@ class EditorController extends ChangeNotifier {
     pubspec.dirty = true;
     notifyListeners();
     await saveWorkspace();
+    final savedPubspec = File(_joinPath(_workspacePath, 'pubspec.yaml'));
+    if (!savedPubspec.existsSync() ||
+        !RegExp(
+          '^\\s*$name:',
+          multiLine: true,
+        ).hasMatch(savedPubspec.readAsStringSync())) {
+      throw StateError('The dependency could not be written to pubspec.yaml.');
+    }
+    _pushActivity(
+      'Added $name plugin',
+      'Updated pubspec.yaml and refreshing package dependencies.',
+      Icons.extension_rounded,
+      const Color(0xFF0F766E),
+    );
+    notifyListeners();
     await getFlutterPackages();
   }
 
