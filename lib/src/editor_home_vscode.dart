@@ -37,6 +37,7 @@ class _EditorHomePageState extends State<EditorHomePage> {
   bool _setupComplete = false;
   bool _setupBusy = false;
   bool _showPreviewPanel = false;
+  bool _previewLaunchBlocking = false;
 
   @override
   void initState() {
@@ -293,162 +294,216 @@ class _EditorHomePageState extends State<EditorHomePage> {
         if (!_setupComplete) {
           return _buildStartupSetup(context);
         }
-        return Scaffold(
-          backgroundColor: const Color(0xFF1E1F26),
-          body: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: <Color>[
-                  Color(0xFF20222C),
-                  Color(0xFF171922),
-                  Color(0xFF111318),
-                ],
-              ),
-            ),
-            child: SafeArea(
-              child: Column(
-                children: <Widget>[
-                  _TopCommandBar(
-                    controller: _controller,
-                    onOpenPreview: _openPreviewWindow,
-                    onRunFlow: _controller.runFullFlow,
-                    onSaveWorkspace: _controller.saveWorkspace,
-                    onAddFile: _openAddFileDialog,
-                    onGenerateSample: _controller.generateStarterWorkspace,
+        return Stack(
+          children: <Widget>[
+            Scaffold(
+              backgroundColor: const Color(0xFF1E1F26),
+              body: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: <Color>[
+                      Color(0xFF20222C),
+                      Color(0xFF171922),
+                      Color(0xFF111318),
+                    ],
                   ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final wide = constraints.maxWidth >= 1180;
-                          if (wide) {
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: <Widget>[
-                                SizedBox(
-                                  width: 60,
-                                  child: _ActivityRail(
+                ),
+                child: SafeArea(
+                  child: Column(
+                    children: <Widget>[
+                      _TopCommandBar(
+                        controller: _controller,
+                        onOpenPreview: _openPreviewWindow,
+                        onRunFlow: _controller.runFullFlow,
+                        onSaveWorkspace: _controller.saveWorkspace,
+                        onAddFile: _openAddFileDialog,
+                        onGenerateSample: _controller.generateStarterWorkspace,
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final wide = constraints.maxWidth >= 1180;
+                              if (wide) {
+                                return Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: <Widget>[
+                                    SizedBox(
+                                      width: 60,
+                                      child: _ActivityRail(
+                                        controller: _controller,
+                                        onAddFile: _openAddFileDialog,
+                                        onGenerateSample: _controller
+                                            .generateStarterWorkspace,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    SizedBox(
+                                      width: 300,
+                                      child: _ExplorerPane(
+                                        controller: _controller,
+                                        onAddFile: _openAddFileDialog,
+                                        onAddFolder: _openAddFolderDialog,
+                                        onSelectFile: _selectProjectFile,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: <Widget>[
+                                          Expanded(
+                                            child: _EditorPane(
+                                              controller: _controller,
+                                              editorController:
+                                                  _editorController,
+                                              onEditorChanged: _controller
+                                                  .updateActiveFileContent,
+                                              onSaveWorkspace:
+                                                  _controller.saveWorkspace,
+                                              onGenerateSample: _controller
+                                                  .generateStarterWorkspace,
+                                              onAddFile: _openAddFileDialog,
+                                              onSelectTab:
+                                                  _controller.selectFilePath,
+                                              onCloseTab:
+                                                  _controller.closeFileTab,
+                                            ),
+                                          ),
+                                          if (_showPreviewPanel) ...<Widget>[
+                                            const SizedBox(width: 10),
+                                            SizedBox(
+                                              width:
+                                                  constraints.maxWidth >= 1700
+                                                  ? 420
+                                                  : 340,
+                                              child: _PreviewPanel(
+                                                controller: _controller,
+                                                onClose: _closePreviewWindow,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              }
+
+                              return ListView(
+                                padding: EdgeInsets.zero,
+                                children: <Widget>[
+                                  _EditorPane(
                                     controller: _controller,
-                                    onAddFile: _openAddFileDialog,
+                                    editorController: _editorController,
+                                    onEditorChanged:
+                                        _controller.updateActiveFileContent,
+                                    onSaveWorkspace: _controller.saveWorkspace,
                                     onGenerateSample:
                                         _controller.generateStarterWorkspace,
+                                    onAddFile: _openAddFileDialog,
+                                    onSelectTab: _controller.selectFilePath,
+                                    onCloseTab: _controller.closeFileTab,
                                   ),
-                                ),
-                                const SizedBox(width: 10),
-                                SizedBox(
-                                  width: 300,
-                                  child: _ExplorerPane(
+                                  if (_showPreviewPanel) ...<Widget>[
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      height: 420,
+                                      child: _PreviewPanel(
+                                        controller: _controller,
+                                        onClose: _closePreviewWindow,
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 12),
+                                  _ExplorerPane(
                                     controller: _controller,
                                     onAddFile: _openAddFileDialog,
                                     onAddFolder: _openAddFolderDialog,
                                     onSelectFile: _selectProjectFile,
                                   ),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (_previewLaunchBlocking)
+              Positioned.fill(
+                child: ColoredBox(
+                  color: Color(0xB8171922),
+                  child: Center(
+                    child: Container(
+                      width: 330,
+                      padding: const EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF23242E),
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: const Color(0xFF4FC1FF)),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          const CircularProgressIndicator(
+                            color: Color(0xFF4FC1FF),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Launching Flutter debug preview…',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  color: const Color(0xFFF3F4F6),
+                                  fontWeight: FontWeight.w700,
                                 ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: <Widget>[
-                                      Expanded(
-                                        child: _EditorPane(
-                                          controller: _controller,
-                                          editorController: _editorController,
-                                          onEditorChanged: _controller
-                                              .updateActiveFileContent,
-                                          onSaveWorkspace:
-                                              _controller.saveWorkspace,
-                                          onGenerateSample: _controller
-                                              .generateStarterWorkspace,
-                                          onAddFile: _openAddFileDialog,
-                                          onSelectTab:
-                                              _controller.selectFilePath,
-                                          onCloseTab: _controller.closeFileTab,
-                                        ),
-                                      ),
-                                      if (_showPreviewPanel) ...<Widget>[
-                                        const SizedBox(width: 10),
-                                        SizedBox(
-                                          width: constraints.maxWidth >= 1700
-                                              ? 420
-                                              : 340,
-                                          child: _PreviewPanel(
-                                            controller: _controller,
-                                            onClose: _closePreviewWindow,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            );
-                          }
-
-                          return ListView(
-                            padding: EdgeInsets.zero,
-                            children: <Widget>[
-                              _EditorPane(
-                                controller: _controller,
-                                editorController: _editorController,
-                                onEditorChanged:
-                                    _controller.updateActiveFileContent,
-                                onSaveWorkspace: _controller.saveWorkspace,
-                                onGenerateSample:
-                                    _controller.generateStarterWorkspace,
-                                onAddFile: _openAddFileDialog,
-                                onSelectTab: _controller.selectFilePath,
-                                onCloseTab: _controller.closeFileTab,
-                              ),
-                              if (_showPreviewPanel) ...<Widget>[
-                                const SizedBox(height: 12),
-                                SizedBox(
-                                  height: 420,
-                                  child: _PreviewPanel(
-                                    controller: _controller,
-                                    onClose: _closePreviewWindow,
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 12),
-                              _ExplorerPane(
-                                controller: _controller,
-                                onAddFile: _openAddFileDialog,
-                                onAddFolder: _openAddFolderDialog,
-                                onSelectFile: _selectProjectFile,
-                              ),
-                            ],
-                          );
-                        },
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'The editor will unlock when the inline preview is ready.',
+                            textAlign: TextAlign.center,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: const Color(0xFF9CA3AF)),
+                          ),
+                        ],
                       ),
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
+          ],
         );
       },
     );
   }
 
   Future<void> _openPreviewWindow() async {
-    await _controller.startLivePreview();
-    if (!mounted) {
-      return;
+    if (_previewLaunchBlocking) return;
+    setState(() => _previewLaunchBlocking = true);
+    try {
+      await _controller.startLivePreview();
+      if (!mounted) return;
+      if (_controller.previewRunner.state != PreviewRunnerState.running) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(_controller.previewRunner.message)),
+        );
+        return;
+      }
+      setState(() => _showPreviewPanel = true);
+    } finally {
+      if (mounted) {
+        setState(() => _previewLaunchBlocking = false);
+      }
     }
-    if (_controller.previewRunner.state != PreviewRunnerState.running) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_controller.previewRunner.message)),
-      );
-      return;
-    }
-    setState(() {
-      _showPreviewPanel = true;
-    });
   }
 
   void _closePreviewWindow() {
