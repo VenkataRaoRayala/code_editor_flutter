@@ -507,6 +507,16 @@ class EditorController extends ChangeNotifier {
     );
   }
 
+  Future<void> warmupLivePreview() async {
+    if (!_previewRunner.isRunning) return;
+    for (var pass = 0; pass < 2; pass++) {
+      await _previewRunner.syncFiles(
+        projectPath: _previewRunner.projectPath ?? _workspacePath,
+        files: _files,
+      );
+    }
+  }
+
   Future<void> stopLivePreview() => _previewRunner.stop();
 
   @override

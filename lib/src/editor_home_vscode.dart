@@ -1405,6 +1405,7 @@ class _PreviewPanel extends StatelessWidget {
                       controller.activeFile?.path ?? 'No file selected',
                   onStart: controller.startLivePreview,
                   onStop: controller.stopLivePreview,
+                  onPageReady: controller.warmupLivePreview,
                 ),
               );
             },
@@ -1421,12 +1422,14 @@ class _RuntimePreviewSurface extends StatefulWidget {
     required this.activeFilePath,
     required this.onStart,
     required this.onStop,
+    required this.onPageReady,
   });
 
   final FlutterPreviewRunner runner;
   final String activeFilePath;
   final Future<void> Function() onStart;
   final Future<void> Function() onStop;
+  final Future<void> Function() onPageReady;
 
   @override
   State<_RuntimePreviewSurface> createState() => _RuntimePreviewSurfaceState();
@@ -1438,6 +1441,7 @@ class _RuntimePreviewSurfaceState extends State<_RuntimePreviewSurface> {
   int _loadedPreviewRevision = -1;
   String? _webError;
   bool _webViewReady = false;
+  bool _initialWarmupStarted = false;
 
   @override
   void initState() {
@@ -1456,6 +1460,7 @@ class _RuntimePreviewSurfaceState extends State<_RuntimePreviewSurface> {
       _loadedUri = null;
       _webError = null;
       _webViewReady = false;
+      _initialWarmupStarted = false;
       unawaited(_prepareWebView());
     }
   }
@@ -1498,6 +1503,10 @@ class _RuntimePreviewSurfaceState extends State<_RuntimePreviewSurface> {
           onPageFinished: (_) {
             if (mounted) {
               setState(() => _webError = null);
+            }
+            if (!_initialWarmupStarted && widget.runner.isRunning) {
+              _initialWarmupStarted = true;
+              unawaited(widget.onPageReady());
             }
           },
           onWebResourceError: (error) {
