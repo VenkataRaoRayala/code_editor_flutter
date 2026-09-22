@@ -487,8 +487,9 @@ class _EditorHomePageState extends State<EditorHomePage> {
   }
 
   Future<void> _openPreviewWindow() async {
-    if (_previewLaunchBlocking) return;
-    setState(() => _previewLaunchBlocking = true);
+    if (!_showPreviewPanel && mounted) {
+      setState(() => _showPreviewPanel = true);
+    }
     try {
       await _controller.startLivePreview();
       if (!mounted) return;
@@ -498,9 +499,8 @@ class _EditorHomePageState extends State<EditorHomePage> {
         );
         return;
       }
-      setState(() => _showPreviewPanel = true);
     } finally {
-      if (mounted) {
+      if (mounted && _previewLaunchBlocking) {
         setState(() => _previewLaunchBlocking = false);
       }
     }
@@ -1642,6 +1642,8 @@ class _RuntimePreviewSurfaceState extends State<_RuntimePreviewSurface> {
                                 Text(
                                   runner.state == PreviewRunnerState.failed
                                       ? runner.message
+                                      : isBusy
+                                      ? 'Loading preview, please wait…'
                                       : 'Run the Flutter web preview to see this workspace here.',
                                   textAlign: TextAlign.center,
                                   style: const TextStyle(
