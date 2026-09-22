@@ -319,8 +319,8 @@ class _EditorHomePageState extends State<EditorHomePage> {
                         onSaveWorkspace: _controller.saveWorkspace,
                         onAddFile: _openAddFileDialog,
                         onGenerateSample: _controller.generateStarterWorkspace,
-                        onAnalyze: _controller.runFlutterAnalyze,
-                        onGetPackages: _controller.getFlutterPackages,
+                        onAnalyze: _runAnalyzer,
+                        onGetPackages: _getPackages,
                         onAddPlugin: _openPluginDialog,
                       ),
                       Expanded(
@@ -616,6 +616,42 @@ class _EditorHomePageState extends State<EditorHomePage> {
         const SnackBar(content: Text('This file is not editable as text.')),
       );
     }
+  }
+
+  Future<void> _runAnalyzer() async {
+    await _controller.runFlutterAnalyze();
+    if (!mounted) return;
+    await _showToolOutput('Flutter analyze', _controller.toolOutput);
+  }
+
+  Future<void> _getPackages() async {
+    await _controller.getFlutterPackages();
+    if (!mounted) return;
+    await _showToolOutput('Flutter pub get', _controller.toolOutput);
+  }
+
+  Future<void> _showToolOutput(String title, String output) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: SizedBox(
+          width: 680,
+          child: SingleChildScrollView(
+            child: SelectableText(
+              output.isEmpty ? 'No output.' : output,
+              style: const TextStyle(fontFamily: 'Menlo', fontSize: 12),
+            ),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   String _suggestFilePath() {

@@ -231,6 +231,7 @@ class EditorController extends ChangeNotifier {
   int _previewStageIndex = 0;
   double _previewProgress = 0;
   bool _isSimulating = false;
+  String _toolOutput = '';
 
   FlutterSdkSnapshot get sdkSnapshot => _sdkSnapshot;
   String get projectName => _projectName;
@@ -240,6 +241,7 @@ class EditorController extends ChangeNotifier {
   int get previewStageIndex => _previewStageIndex;
   double get previewProgress => _previewProgress;
   bool get isSimulating => _isSimulating;
+  String get toolOutput => _toolOutput;
   FlutterPreviewRunner get previewRunner => _previewRunner;
   List<WorkspaceFile> get files => List.unmodifiable(_files);
   List<String> get folders => List.unmodifiable(_folders.toList()..sort());
@@ -638,6 +640,7 @@ class EditorController extends ChangeNotifier {
   Future<void> runFlutterAnalyze() async {
     final sdkPath = _sdkSnapshot.path;
     if (sdkPath == null) {
+      _toolOutput = 'Choose a Flutter SDK before running flutter analyze.';
       _pushActivity(
         'Analyzer unavailable',
         'Choose a Flutter SDK before running flutter analyze.',
@@ -661,6 +664,7 @@ class EditorController extends ChangeNotifier {
       runInShell: Platform.isWindows,
     );
     final output = '${result.stdout}\n${result.stderr}'.trim();
+    _toolOutput = output.isEmpty ? 'No analyzer output.' : output;
     _pushActivity(
       result.exitCode == 0 ? 'Analyzer passed' : 'Analyzer found issues',
       output.isEmpty ? 'No analyzer output.' : _lastLines(output),
@@ -674,7 +678,11 @@ class EditorController extends ChangeNotifier {
 
   Future<void> getFlutterPackages() async {
     final sdkPath = _sdkSnapshot.path;
-    if (sdkPath == null) return;
+    if (sdkPath == null) {
+      _toolOutput = 'Choose a Flutter SDK before installing packages.';
+      notifyListeners();
+      return;
+    }
     final result = await Process.run(
       _flutterExecutablePath(sdkPath),
       const <String>['pub', 'get'],
@@ -682,6 +690,7 @@ class EditorController extends ChangeNotifier {
       runInShell: Platform.isWindows,
     );
     final output = '${result.stdout}\n${result.stderr}'.trim();
+    _toolOutput = output.isEmpty ? 'flutter pub get completed.' : output;
     _pushActivity(
       result.exitCode == 0 ? 'Packages installed' : 'Package install failed',
       output.isEmpty ? 'flutter pub get completed.' : _lastLines(output),
@@ -724,6 +733,7 @@ class EditorController extends ChangeNotifier {
     pubspec.dirty = true;
     notifyListeners();
     await saveWorkspace();
+    await getFlutterPackages();
   }
 
   Future<void> saveWorkspace({bool syncPreview = true}) async {
