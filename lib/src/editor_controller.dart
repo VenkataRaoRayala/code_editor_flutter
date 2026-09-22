@@ -231,7 +231,6 @@ class EditorController extends ChangeNotifier {
   int _previewStageIndex = 0;
   double _previewProgress = 0;
   bool _isSimulating = false;
-  Timer? _previewSyncTimer;
 
   FlutterSdkSnapshot get sdkSnapshot => _sdkSnapshot;
   String get projectName => _projectName;
@@ -474,21 +473,10 @@ class EditorController extends ChangeNotifier {
     file.content = content;
     file.dirty = true;
     notifyListeners();
-    if (_previewRunner.isRunning) {
-      _previewSyncTimer?.cancel();
-      _previewSyncTimer = Timer(const Duration(milliseconds: 150), () {
-        unawaited(
-          _previewRunner.syncFiles(
-            projectPath: _previewRunner.projectPath ?? _workspacePath,
-            files: _files,
-          ),
-        );
-      });
-    }
   }
 
   Future<void> startLivePreview() async {
-    await saveWorkspace();
+    await saveWorkspace(syncPreview: false);
     var sdk = _sdkSnapshot;
     if (!sdk.ready || sdk.path == null) {
       sdk = await _sdkService.detect();
@@ -521,7 +509,6 @@ class EditorController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _previewSyncTimer?.cancel();
     _previewRunner.dispose();
     super.dispose();
   }
@@ -648,7 +635,7 @@ class EditorController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> saveWorkspace() async {
+  Future<void> saveWorkspace({bool syncPreview = true}) async {
     final targetPath = _workspacePath.trim().isEmpty
         ? _defaultWorkspacePath(_projectName)
         : _workspacePath.trim();
@@ -665,6 +652,13 @@ class EditorController extends ChangeNotifier {
       }
       destination.writeAsStringSync(file.content);
       file.dirty = false;
+    }
+
+    if (syncPreview && _previewRunner.isRunning) {
+      await _previewRunner.syncFiles(
+        projectPath: _previewRunner.projectPath ?? targetPath,
+        files: _files,
+      );
     }
 
     _workspacePath = targetPath;
